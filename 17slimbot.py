@@ -5,7 +5,6 @@ from discord.ext import commands, tasks
 import os
 from dotenv import load_dotenv
 import youtube_dl
-import copy
 
 load_dotenv()
 
@@ -13,7 +12,26 @@ DISCORD_TOKEN = os.getenv("discord_token")
 
 intents = discord.Intents().default()
 bot = commands.Bot(command_prefix=",",intents=intents)
-songs = asyncio.Queue()
+
+class Queue2(asyncio.Queue):
+    def move(self, a, b):
+        if self.empty():
+            raise asyncio.QueueEmpty
+        item1 = self._queue[a]
+        del self._queue[a]
+        self._queue.insert(b,item1)
+
+    def value_at(self, a):
+        if self.empty():
+            return None
+        return self._queue[a]
+
+    def remove(self, a):
+        if self.empty():
+            return
+        del self._queue[a]
+
+songs = Queue2()
 songlist = [] # contains list of songs and lengths to display in queue
 time_started = None
 play_next_song = asyncio.Event()
@@ -63,7 +81,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
         filenames = []
         entries = []
         if 'entries' in data:
-            print('queuing {} songs'.format(len(data['entries'])))
             for entry in data['entries']:  # formerly data = data['entries'][0]
                 filenames.append(entry['url'] if stream else ytdl.prepare_filename(entry))
                 entries.append(entry)
@@ -209,20 +226,20 @@ async def skip(ctx):
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
 
-@bot.command(help='Stops the song')
-async def stop(ctx):
+@bot.command(aliases=['clr'], help='Stops the song')
+async def clear(ctx):
     voice_client = ctx.message.guild.voice_client
+    if songs.empty():
+        await ctx.send(embed=discord.Embed(description='The bot has nothing queued.',
+            color=discord.Colour.gold()))
     while not songs.empty():
         try:
             songs.get_nowait()
             songlist.pop(0)
         except e:
             pass
-    if (voice_client and voice_client.is_playing()):
-        voice_client.stop()
-    else:
-        await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
-            color=discord.Colour.gold()))
+    await ctx.send(embed=discord.Embed(description='Cleared the queue.',
+        color=discord.Colour.blue()))
 
 @bot.command(aliases=['q','songlist','list','ls'], help="Displays the queue")
 async def queue(ctx):
@@ -291,14 +308,42 @@ async def seek(ctx, *args):
     await ctx.send(embed=discord.Embed(description='Now playing from {}'.format(tm),
         color=discord.Colour.blue()))
 
-#@bot.command(aliases=['mv'], help='Moves a song to a different place in the queue')
-#async def move(ctx, *args):
-#    global songs
-#    if len(args) < 2:
-#        bot.help_command.context = ctx
-#        await bot.help_command.send_command_help(bot.get_command('move'))
-#        return
+@bot.command(aliases=['mv'], help='Moves a song to a different place in the queue')
+async def move(ctx, *args):
+    if len(args) < 2:
+        bot.help_command.context = ctx
+        await bot.help_command.send_command_help(bot.get_command('move'))
+        return
 
+    a = int(args[0]) - 1
+    b = int(args[1]) - 1
+    a = a if a >= 0 else 0
+    b = b if b >= 0 else 0
+    a = a if a < songs.qsize() else songs.qsize() - 1
+    b = b if b < songs.qsize() else songs.qsize() - 1
+    songs.move(a, b)
+    songlist.insert(b, songlist.pop(a))
+    await ctx.send(embed=discord.Embed(description='Moved {} to position {}'
+        .format(songs.value_at(b)[2].title, b + 1),
+        color=discord.Colour.blue()))
+
+@bot.command(aliases=['rm','del','delete'], help='Removes a track from the queue')
+async def remove(ctx, *args):
+    if len(args) < 1:
+        bot.help_command.context = ctx
+        await bot.help_command.send_command_help(bot.get_command('move'))
+        return
+
+    a = int(args[0]) - 1
+    a = a if a >= 0 else 0
+    a = a if a < songs.qsize() else songs.qsize() - 1
+
+    title = songs.value_at(a)[2].title
+    songs.remove(a)
+    songlist.pop(a)
+    await ctx.send(embed=discord.Embed(description='Removed track {}: {}'
+        .format(a + 1, title),
+        color=discord.Colour.blue()))
 
 if __name__ == '__main__':
     bot.loop.create_task(audio_player_task())
