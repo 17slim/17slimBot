@@ -266,7 +266,7 @@ async def song(ctx):
         description=fmt.format(tm, total),
         color=discord.Colour.blue()))
 
-@bot.command(aliases=['playfrom'], help='Seeks to a given point in the track')
+@bot.command(aliases=['playfrom','goto'], help='Seeks to a given point in the track')
 async def seek(ctx, *args):
     global time_started
     if len(args) == 0:
