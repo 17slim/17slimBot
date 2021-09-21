@@ -35,6 +35,7 @@ songs = Queue2()
 songlist = [] # contains list of songs and lengths to display in queue
 time_started = None
 play_next_song = asyncio.Event()
+next_delete = None
 
 youtube_dl.utils.bug_reports_message = lambda: ''
 
@@ -89,27 +90,53 @@ class YTDLSource(discord.PCMVolumeTransformer):
             entries.append(data)
         return [cls(discord.FFmpegPCMAudio(filenames[i], **ffmpeg_options), data=entries[i]) for i in range(len(filenames))]
 
+class FileSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, title, volume=0.5):
+        super().__init__(source, volume)
+        self.title = title
+        self.length = 1
+        self.link = self.title
+        # TODO: figure out how to get length of file
+        #self.length = data.get('duration')
+
+    @classmethod
+    async def from_file(cls, filename, *, loop=None, stream=False, timestamp=0):
+        return cls(discord.FFmpegPCMAudio(source=filename), title=filename.split('/')[-1])
+
 async def audio_player_task():
-    global time_started
+    global time_started, next_delete
     while True:
         play_next_song.clear()
-        (ctx, vc, ytsource) = await songs.get()
+        (ctx, vc, source) = await songs.get()
         songlist.pop(0)
+        if isinstance(source, FileSource):
+            next_delete = './downloads/' + source.title
+
         if vc.is_connected():
-            vc.play(ytsource, after=toggle_next)
+            vc.play(source, after=toggle_next)
             time_started = datetime.datetime.now()
             embed = discord.Embed(
                 title='Now playing',
-                description=ytsource.link,
+                description=source.link,
                 color=discord.Colour.blue(),
             )
             await ctx.send(embed=embed)
         await play_next_song.wait()
 
 def toggle_next(e):
+    global next_delete
     if e:
         print('Error playing audio: %s' % e)
     bot.loop.call_soon_threadsafe(play_next_song.set)
+    if next_delete:
+        try:
+            os.remove(next_delete)
+            next_delete = None
+        except PermissionError:
+            # permission errors are fine, as they only seem to occur when future sources
+            # have a handle on the file still. if no queued tracks use the same file
+            # then it seems to delete as expected.
+            pass
 
 def sec_to_time(seconds):
     seconds = int(seconds)
@@ -151,7 +178,7 @@ async def leave(ctx):
 
 @bot.command(aliases=['p'], help='Plays a song')
 async def play(ctx, *args):
-    if len(args) == 0:
+    if len(args) == 0 and len(ctx.message.attachments) == 0:
         await resume(ctx)
         return
 
@@ -162,6 +189,23 @@ async def play(ctx, *args):
     # if still not in voice, exit
     if not (voice_client and voice_client.is_connected()):
         return
+
+    # play file if no args and has attachment
+    if len(args) == 0:
+        for a in ctx.message.attachments:
+            async with ctx.typing():
+                f = './downloads/' + a.filename.replace('/','_').replace('\\','_')
+                await a.save(f)
+                source = await FileSource.from_file(f)
+                await songs.put((ctx, voice_client, source))
+                songlist.append({'link':source.link, 'length':source.length})
+                await ctx.send(embed=discord.Embed(
+                    title='Queued track (Position {})'.format(songs.qsize()),
+                    description=songlist[-1]['link'],
+                    color=discord.Colour.blue(),
+                ))
+        return
+
 
     # combine mutli-word search to one url
     url = ''
@@ -175,6 +219,7 @@ async def play(ctx, *args):
         for ytsource in ytsources:
             await songs.put((ctx, voice_client, ytsource))
             songlist.append({'link':ytsource.link, 'length':ytsource.length})
+
         embed = discord.Embed(description='Failed to queue songs',
             color = discord.Colour.gold())
         if len(ytsources) == 1:
