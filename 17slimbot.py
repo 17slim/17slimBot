@@ -5,6 +5,7 @@ from discord.ext import commands, tasks
 import os
 from dotenv import load_dotenv
 import youtube_dl
+import audioread
 
 load_dotenv()
 
@@ -94,14 +95,17 @@ class FileSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, title, volume=0.5):
         super().__init__(source, volume)
         self.title = title
-        self.length = 1
         self.link = self.title
-        # TODO: figure out how to get length of file
-        #self.length = data.get('duration')
+        self.filepath = './downloads/' + self.title
+        self.length = audioread.audio_open(self.filepath).duration
 
     @classmethod
     async def from_file(cls, filename, *, loop=None, stream=False, timestamp=0):
-        return cls(discord.FFmpegPCMAudio(source=filename), title=filename.split('/')[-1])
+        ffmpeg_options = {
+            'options': '-ss %d' % timestamp,
+        }
+        src = discord.FFmpegPCMAudio(source=filename, **ffmpeg_options)
+        return cls(src, title=filename.split('/')[-1])
 
 async def audio_player_task():
     global time_started, next_delete
@@ -250,10 +254,10 @@ async def resume(ctx):
     voice_client = ctx.message.guild.voice_client
     if (voice_client and voice_client.is_paused()):
         voice_client.resume()
-        ytsource = voice_client.source
+        source = voice_client.source
         embed = discord.Embed(
             title='Resumed track',
-            description=ytsource.link,
+            description=source.link,
             color=discord.Colour.blue(),
         )
         await ctx.send(embed=embed)
@@ -323,8 +327,11 @@ async def song(ctx):
     i = int(1.0 * len(prg) * elapsed.total_seconds() / voice_client.source.length)
     prg = prg[:i] + ':radio_button:' + prg[i:]
     fmt = prg + '\n[{}/{}]'
+    url = ''
+    if isinstance(voice_client.source, YTDLSource):
+        url = voice_client.source.weburl
     await ctx.send(embed=discord.Embed(title=voice_client.source.title,
-        url=voice_client.source.weburl,
+        url=url,
         description=fmt.format(tm, total),
         color=discord.Colour.blue()))
 
@@ -346,8 +353,11 @@ async def seek(ctx, *args):
     tm = args[0]
     sec = time_to_sec(tm)
     tm = sec_to_time(sec)
-    ytsource = voice_client.source
-    voice_client.source = (await YTDLSource.from_url(ytsource.weburl, loop=bot.loop, stream=True, timestamp=sec))[0]
+    source = voice_client.source
+    if isinstance(source, YTDLSource):
+        voice_client.source = (await YTDLSource.from_url(source.weburl, loop=bot.loop, stream=True, timestamp=sec))[0]
+    else:
+        voice_client.source = await FileSource.from_file(source.filepath, timestamp=sec)
     time_started = datetime.datetime.now() - datetime.timedelta(seconds = sec)
 
     await ctx.send(embed=discord.Embed(description='Now playing from {}'.format(tm),
@@ -389,6 +399,12 @@ async def remove(ctx, *args):
     await ctx.send(embed=discord.Embed(description='Removed track {}: {}'
         .format(a + 1, title),
         color=discord.Colour.blue()))
+
+@bot.event
+async def on_ready():
+    print('changing presence')
+    await bot.change_presence(activity=discord.Activity(name='music - now with files!', type=discord.ActivityType.playing))
+    print('presence changed')
 
 if __name__ == '__main__':
     bot.loop.create_task(audio_player_task())
