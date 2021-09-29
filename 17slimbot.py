@@ -350,6 +350,7 @@ async def seek(ctx, *args):
             color=discord.Colour.gold()))
         return
 
+    voice_client.pause()
     tm = args[0]
     sec = time_to_sec(tm)
     tm = sec_to_time(sec)
@@ -359,6 +360,7 @@ async def seek(ctx, *args):
     else:
         voice_client.source = await FileSource.from_file(source.filepath, timestamp=sec)
     time_started = datetime.datetime.now() - datetime.timedelta(seconds = sec)
+    voice_client.resume()
 
     await ctx.send(embed=discord.Embed(description='Now playing from {}'.format(tm),
         color=discord.Colour.blue()))
