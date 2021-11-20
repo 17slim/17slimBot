@@ -1,0 +1,1 @@
+python .\17slimbot.py
