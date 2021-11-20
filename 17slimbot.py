@@ -173,6 +173,7 @@ async def join(ctx):
 
 @bot.command(help='Tells the bot to leave the voice channel')
 async def leave(ctx):
+    await clear(ctx)
     voice_client = ctx.message.guild.voice_client
     if voice_client and voice_client.is_connected():
         await voice_client.disconnect()
@@ -252,7 +253,7 @@ async def pause(ctx):
 @bot.command(help='Resumes the song')
 async def resume(ctx):
     voice_client = ctx.message.guild.voice_client
-    if (voice_client and voice_client.is_paused()):
+    if voice_client:# and voice_client.is_paused()):
         voice_client.resume()
         source = voice_client.source
         embed = discord.Embed(
@@ -278,7 +279,7 @@ async def skip(ctx):
 @bot.command(aliases=['clr'], help='Stops the song')
 async def clear(ctx):
     voice_client = ctx.message.guild.voice_client
-    if songlist.empty() && songs.empty():
+    if songlist.empty() and songs.empty():
         await ctx.send(embed=discord.Embed(description='The bot has nothing queued.',
             color=discord.Colour.gold()))
     while not songs.empty():
@@ -300,7 +301,6 @@ async def queue(ctx):
     if not (voice_client and voice_client.is_playing()):
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
-        return
     sb = ''
     for i in range(len(songlist)):
         sb += '{}.\t{} [{}]\n'.format(i + 1, songlist[i]['link'], sec_to_time(songlist[i]['length']))
