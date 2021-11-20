@@ -278,12 +278,16 @@ async def skip(ctx):
 @bot.command(aliases=['clr'], help='Stops the song')
 async def clear(ctx):
     voice_client = ctx.message.guild.voice_client
-    if songs.empty():
+    if songlist.empty() && songs.empty():
         await ctx.send(embed=discord.Embed(description='The bot has nothing queued.',
             color=discord.Colour.gold()))
     while not songs.empty():
         try:
             songs.get_nowait()
+        except e:
+            pass
+    while not songlist.empty():
+        try:
             songlist.pop(0)
         except e:
             pass
