@@ -208,7 +208,7 @@ async def play(ctx, *args):
     # if still not in voice, exit
     if not (voice_client and voice_client.is_connected()):
         await ctx.send(embed=discord.Embed(description="Error trying to join server.",
-            color.discord.Colour.red()))
+            color=discord.Colour.red()))
         return
 
     # play file if no args and has attachment
