@@ -188,7 +188,7 @@ async def leave(ctx):
     if voice_client and voice_client.is_connected():
         await voice_client.disconnect()
         ctx.message.add_reaction('\:thumbsup:')
-    else if not voice_client:
+    elif not voice_client:
         await ctx.send(embed=discord.Embed(description="The bot has no voice client for the server.",
             color=discord.Colour.red()))
     else:
@@ -262,7 +262,7 @@ async def pause(ctx):
     voice_client = ctx.message.guild.voice_client
     if (voice_client and voice_client.is_playing()):
         voice_client.pause()
-    else if not voice_client:
+    elif not voice_client:
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
     else:
@@ -281,7 +281,7 @@ async def resume(ctx):
             color=discord.Colour.blue(),
         )
         await ctx.send(embed=embed)
-    else if not voice_client:
+    elif not voice_client:
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
     else:
@@ -294,7 +294,7 @@ async def skip(ctx):
     if (voice_client and voice_client.is_playing()):
         voice_client.stop()
         await ctx.send(embed=discord.Embed(description='Skipped track.', color=discord.Colour.blue()))
-    else if not voice_client:
+    elif not voice_client:
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
     else:
@@ -322,7 +322,7 @@ async def queue(ctx):
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
         return
-    else if not voice_client.is_playing():
+    elif not voice_client.is_playing():
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
         return
@@ -349,7 +349,7 @@ async def song(ctx):
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
         return
-    else if not voice_client.is_playing():
+    elif not voice_client.is_playing():
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
         return
@@ -383,7 +383,7 @@ async def seek(ctx, *args):
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
         return
-    else if not voice_client.is_playing():
+    elif not voice_client.is_playing():
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
         return
