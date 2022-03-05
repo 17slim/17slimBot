@@ -38,6 +38,8 @@ time_started = None
 play_next_song = asyncio.Event()
 next_delete = None
 
+last_vc = None
+
 youtube_dl.utils.bug_reports_message = lambda: ''
 
 ytdl_format_options = {
@@ -163,20 +165,32 @@ def time_to_sec(tm):
 
 @bot.command(help='Tells the bot to join the voice channel')
 async def join(ctx):
-    if not ctx.message.author.voice:
-        await ctx.send(embed=discord.Embed(description="{} is not connected to a voice channel".format(ctx.message.author.name),
+    global last_vc
+    if not ctx.message.author.voice and not last_vc:
+        await ctx.send(embed=discord.Embed(description="{} is not connected to a voice channel and bot has no channel history.".format(ctx.message.author.name),
             color=discord.Colour.gold()))
         return
-    else:
-        channel = ctx.message.author.voice.channel
-    await channel.connect()
+    # either sender in voice or last_vc exists (or both)
+    if ctx.message.author.voice:
+        # sender in voice, connect to same channel
+        last_vc = ctx.message.author.voice.channel
+    voice_client = ctx.message.guild.voice_client
+    if last_vc and voice_client and last_vc == voice_client.channel:
+        # bot is in channel it would join (either last_vc, or sender's vc set above)
+        await ctx.send(embed=discord.Embed(description="Already connected to channel.",
+            color=discord.Colour.gold()))
+        return
+    await last_vc.connect()
 
 @bot.command(help='Tells the bot to leave the voice channel')
 async def leave(ctx):
-    await clear(ctx)
     voice_client = ctx.message.guild.voice_client
     if voice_client and voice_client.is_connected():
         await voice_client.disconnect()
+        ctx.message.add_reaction('\:thumbsup:')
+    else if not voice_client:
+        await ctx.send(embed=discord.Embed(description="The bot has no voice client for the server.",
+            color=discord.Colour.red()))
     else:
         await ctx.send(embed=discord.Embed(description="The bot is not connected to a voice channel.",
             color=discord.Colour.gold()))
@@ -193,6 +207,8 @@ async def play(ctx, *args):
     voice_client = ctx.message.guild.voice_client
     # if still not in voice, exit
     if not (voice_client and voice_client.is_connected()):
+        await ctx.send(embed=discord.Embed(description="Error trying to join server.",
+            color.discord.Colour.red())
         return
 
     # play file if no args and has attachment
@@ -246,6 +262,9 @@ async def pause(ctx):
     voice_client = ctx.message.guild.voice_client
     if (voice_client and voice_client.is_playing()):
         voice_client.pause()
+    else if not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
     else:
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
@@ -253,7 +272,7 @@ async def pause(ctx):
 @bot.command(help='Resumes the song')
 async def resume(ctx):
     voice_client = ctx.message.guild.voice_client
-    if voice_client:# and voice_client.is_paused()):
+    if (voice_client and voice_client.is_paused()):
         voice_client.resume()
         source = voice_client.source
         embed = discord.Embed(
@@ -262,6 +281,9 @@ async def resume(ctx):
             color=discord.Colour.blue(),
         )
         await ctx.send(embed=embed)
+    else if not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
     else:
         await ctx.send(embed=discord.Embed(description='The bot was not playing anything before this.',
             color=discord.Colour.gold()))
@@ -272,23 +294,21 @@ async def skip(ctx):
     if (voice_client and voice_client.is_playing()):
         voice_client.stop()
         await ctx.send(embed=discord.Embed(description='Skipped track.', color=discord.Colour.blue()))
+    else if not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
     else:
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
 
 @bot.command(aliases=['clr'], help='Stops the song')
 async def clear(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if songlist.empty() and songs.empty():
+    if songs.empty():
         await ctx.send(embed=discord.Embed(description='The bot has nothing queued.',
             color=discord.Colour.gold()))
     while not songs.empty():
         try:
             songs.get_nowait()
-        except e:
-            pass
-    while not songlist.empty():
-        try:
             songlist.pop(0)
         except e:
             pass
@@ -298,9 +318,15 @@ async def clear(ctx):
 @bot.command(aliases=['q','songlist','list','ls'], help="Displays the queue")
 async def queue(ctx):
     voice_client = ctx.message.guild.voice_client
-    if not (voice_client and voice_client.is_playing()):
+    if not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
+        return
+    else if not voice_client.is_playing():
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
+        return
+
     sb = ''
     for i in range(len(songlist)):
         sb += '{}.\t{} [{}]\n'.format(i + 1, songlist[i]['link'], sec_to_time(songlist[i]['length']))
@@ -319,7 +345,11 @@ async def queue(ctx):
 @bot.command(aliases=['s','songinfo','playing','length'], help="Displays the currently playing song")
 async def song(ctx):
     voice_client = ctx.message.guild.voice_client
-    if not (voice_client and voice_client.is_playing()):
+    if not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
+        return
+    else if not voice_client.is_playing():
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
         return
@@ -349,7 +379,11 @@ async def seek(ctx, *args):
         return
 
     voice_client = ctx.message.guild.voice_client
-    if not (voice_client and voice_client.is_playing()):
+    if not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
+        return
+    else if not voice_client.is_playing():
         await ctx.send(embed=discord.Embed(description='The bot is not playing anything at the moment.',
             color=discord.Colour.gold()))
         return
