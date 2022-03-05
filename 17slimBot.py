@@ -40,6 +40,8 @@ next_delete = None
 
 last_vc = None
 
+thumbsup = '👍'
+
 youtube_dl.utils.bug_reports_message = lambda: ''
 
 ytdl_format_options = {
@@ -169,7 +171,7 @@ async def join(ctx):
     if not ctx.message.author.voice and not last_vc:
         await ctx.send(embed=discord.Embed(description="{} is not connected to a voice channel and bot has no channel history.".format(ctx.message.author.name),
             color=discord.Colour.gold()))
-        return
+        return False
     # either sender in voice or last_vc exists (or both)
     if ctx.message.author.voice:
         # sender in voice, connect to same channel
@@ -179,7 +181,7 @@ async def join(ctx):
         # bot is in channel it would join (either last_vc, or sender's vc set above)
         await ctx.send(embed=discord.Embed(description="Already connected to channel.",
             color=discord.Colour.gold()))
-        return
+        return True
     await last_vc.connect()
 
 @bot.command(help='Tells the bot to leave the voice channel')
@@ -187,7 +189,7 @@ async def leave(ctx):
     voice_client = ctx.message.guild.voice_client
     if voice_client and voice_client.is_connected():
         await voice_client.disconnect()
-        ctx.message.add_reaction('\:thumbsup:')
+        await ctx.message.add_reaction(thumbsup)
     elif not voice_client:
         await ctx.send(embed=discord.Embed(description="The bot has no voice client for the server.",
             color=discord.Colour.red()))
@@ -203,7 +205,9 @@ async def play(ctx, *args):
 
     voice_client = ctx.message.guild.voice_client
     if not (voice_client and voice_client.is_connected()):
-        await join(ctx)
+        succ = await join(ctx)
+        if not succ:
+            return
     voice_client = ctx.message.guild.voice_client
     # if still not in voice, exit
     if not (voice_client and voice_client.is_connected()):
@@ -262,6 +266,7 @@ async def pause(ctx):
     voice_client = ctx.message.guild.voice_client
     if (voice_client and voice_client.is_playing()):
         voice_client.pause()
+        await ctx.message.add_reaction(thumbsup)
     elif not voice_client:
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
@@ -275,12 +280,13 @@ async def resume(ctx):
     if (voice_client and voice_client.is_paused()):
         voice_client.resume()
         source = voice_client.source
-        embed = discord.Embed(
-            title='Resumed track',
-            description=source.link,
-            color=discord.Colour.blue(),
-        )
-        await ctx.send(embed=embed)
+        #embed = discord.Embed(
+        #    title='Resumed track',
+        #    description=source.link,
+        #    color=discord.Colour.blue(),
+        #)
+        #await ctx.send(embed=embed)
+        await ctx.message.add_reaction(thumbsup)
     elif not voice_client:
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
@@ -293,7 +299,8 @@ async def skip(ctx):
     voice_client = ctx.message.guild.voice_client
     if (voice_client and voice_client.is_playing()):
         voice_client.stop()
-        await ctx.send(embed=discord.Embed(description='Skipped track.', color=discord.Colour.blue()))
+        await ctx.message.add_reaction(thumbsup)
+        #await ctx.send(embed=discord.Embed(description='Skipped track.', color=discord.Colour.blue()))
     elif not voice_client:
         await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
             color=discord.Colour.red()))
