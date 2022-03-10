@@ -169,6 +169,7 @@ def time_to_sec(tm):
 async def join(ctx):
     global last_vc
     if not ctx.message.author.voice and not last_vc:
+        print('author not in voice, no last channel')
         await ctx.send(embed=discord.Embed(description="{} is not connected to a voice channel and bot has no channel history.".format(ctx.message.author.name),
             color=discord.Colour.gold()))
         return False
@@ -183,8 +184,10 @@ async def join(ctx):
             color=discord.Colour.gold()))
         return True
     await last_vc.connect()
+    voice_client = ctx.message.guild.voice_client
     if last_vc and voice_client and last_vc == voice_client.channel:
         return True
+    print('default fail join')
     return False
 
 @bot.command(help='Tells the bot to leave the voice channel')
