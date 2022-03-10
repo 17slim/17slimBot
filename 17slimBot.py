@@ -183,6 +183,9 @@ async def join(ctx):
             color=discord.Colour.gold()))
         return True
     await last_vc.connect()
+    if last_vc and voice_client and last_vc == voice_client.channel:
+        return True
+    return False
 
 @bot.command(help='Tells the bot to leave the voice channel')
 async def leave(ctx):
