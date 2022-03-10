@@ -210,16 +210,21 @@ async def play(ctx, *args):
     if not (voice_client and voice_client.is_connected()):
         succ = await join(ctx)
         if not succ:
+            print('failed to join')
             return
+        else:
+            print('joined successfully')
     voice_client = ctx.message.guild.voice_client
     # if still not in voice, exit
     if not (voice_client and voice_client.is_connected()):
+        print('error trying to join server')
         await ctx.send(embed=discord.Embed(description="Error trying to join server.",
             color=discord.Colour.red()))
         return
 
     # play file if no args and has attachment
     if len(args) == 0:
+        print('playing from attachment')
         for a in ctx.message.attachments:
             async with ctx.typing():
                 f = './downloads/' + a.filename.replace('/','_').replace('\\','_')
@@ -234,7 +239,7 @@ async def play(ctx, *args):
                 ))
         return
 
-
+    print('playing from args')
     # combine mutli-word search to one url
     url = ''
     for word in args:
