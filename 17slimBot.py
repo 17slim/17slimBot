@@ -32,8 +32,59 @@ class Queue2(asyncio.Queue):
             return
         del self._queue[a]
 
-songs = Queue2()
-songlist = [] # contains list of songs and lengths to display in queue
+class SongList:
+    def __init__(self):
+        self.songs = Queue2()
+        self.songlist = [] # contains list of songs and lengths to display in queue
+
+    def get(self):
+        self.songlist.pop(0)
+        return self.songs.get()
+
+    def get_nowait(self):
+        self.songlist.pop(0)
+        return self.songs.get_nowait()
+
+    def put(self, val):
+        (_,_,source) = val
+        self.songlist.append({'link':source.link, 'length':source.length})
+        return self.songs.put(val)
+
+    def qsize(self):
+        return self.songs.qsize()
+
+    def empty(self):
+        return self.songs.empty()
+
+    def move(self, a, b):
+        self.songlist.insert(b, self.songlist.pop(a))
+        return self.songs.move(a,b)
+
+    def value_at(self, i):
+        return self.songs.value_at(i)
+
+    def remove(self, i):
+        songlist.pop(i)
+        return self.songs.remove(i)
+
+    def get_link(self, i):
+        return self.songlist[i]['link']
+
+    def get_length(self, i):
+        return self.songlist[i]['link']
+
+    def get_title(self, i):
+        return self.value_at(i)[2].title
+
+    def get_queue(self):
+        sb = ''
+        sl = self.songlist
+        for i in range(len(sl)):
+            sb += '{}.\t{} [{}]\n'.format(i + 1, self.get_link(i), sec_to_time(self.get_length(i)))
+        return sb
+
+
+songs = SongList()
 time_started = None
 play_next_song = asyncio.Event()
 next_delete = None
@@ -116,7 +167,6 @@ async def audio_player_task():
     while True:
         play_next_song.clear()
         (ctx, vc, source) = await songs.get()
-        songlist.pop(0)
         if isinstance(source, FileSource):
             next_delete = './downloads/' + source.title
 
@@ -234,34 +284,29 @@ async def play(ctx, *args):
                 await a.save(f)
                 source = await FileSource.from_file(f)
                 await songs.put((ctx, voice_client, source))
-                songlist.append({'link':source.link, 'length':source.length})
                 await ctx.send(embed=discord.Embed(
                     title='Queued track (Position {})'.format(songs.qsize()),
-                    description=songlist[-1]['link'],
+                    description=songs.get_link(-1),
                     color=discord.Colour.blue(),
                 ))
         return
 
     print('playing from args')
     # combine mutli-word search to one url
-    url = ''
-    for word in args:
-        url += word
-        url += ' '
+    url = ' '.join(args)
 
     async with ctx.typing():
         ytsources = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
         ytsource = ytsources[0]
         for ytsource in ytsources:
             await songs.put((ctx, voice_client, ytsource))
-            songlist.append({'link':ytsource.link, 'length':ytsource.length})
 
         embed = discord.Embed(description='Failed to queue songs',
             color = discord.Colour.gold())
         if len(ytsources) == 1:
             embed = discord.Embed(
                 title='Queued track (Position {})'.format(songs.qsize()),
-                description=songlist[-1]['link'],
+                description=songs.get_link(-1),
                 color=discord.Colour.blue(),
             )
         else:
@@ -327,13 +372,12 @@ async def clear(ctx):
     while not songs.empty():
         try:
             songs.get_nowait()
-            songlist.pop(0)
         except e:
             pass
     await ctx.send(embed=discord.Embed(description='Cleared the queue.',
         color=discord.Colour.blue()))
 
-@bot.command(aliases=['q','songlist','list','ls'], help="Displays the queue")
+@bot.command(aliases=['q','songs','list','ls'], help="Displays the queue")
 async def queue(ctx):
     voice_client = ctx.message.guild.voice_client
     if not voice_client:
@@ -345,9 +389,7 @@ async def queue(ctx):
             color=discord.Colour.gold()))
         return
 
-    sb = ''
-    for i in range(len(songlist)):
-        sb += '{}.\t{} [{}]\n'.format(i + 1, songlist[i]['link'], sec_to_time(songlist[i]['length']))
+    lst = songs.get_queue()
         
     elapsed = datetime.datetime.now() - time_started
     tm = sec_to_time(elapsed.total_seconds())
@@ -357,7 +399,7 @@ async def queue(ctx):
             voice_client.source.link,
             tm,
             total,
-            sb),
+            lst),
         color=discord.Colour.blue()))
 
 @bot.command(aliases=['s','songinfo','playing','length'], help="Displays the currently playing song")
@@ -435,9 +477,8 @@ async def move(ctx, *args):
     a = a if a < songs.qsize() else songs.qsize() - 1
     b = b if b < songs.qsize() else songs.qsize() - 1
     songs.move(a, b)
-    songlist.insert(b, songlist.pop(a))
     await ctx.send(embed=discord.Embed(description='Moved {} to position {}'
-        .format(songs.value_at(b)[2].title, b + 1),
+        .format(songs.get_title(b), b + 1),
         color=discord.Colour.blue()))
 
 @bot.command(aliases=['rm','del','delete'], help='Removes a track from the queue')
@@ -451,12 +492,30 @@ async def remove(ctx, *args):
     a = a if a >= 0 else 0
     a = a if a < songs.qsize() else songs.qsize() - 1
 
-    title = songs.value_at(a)[2].title
+    title = songs.get_title(a)
     songs.remove(a)
-    songlist.pop(a)
     await ctx.send(embed=discord.Embed(description='Removed track {}: {}'
         .format(a + 1, title),
         color=discord.Colour.blue()))
+
+@bot.command(aliases=['rp','spam'], help='Repeats the current track [x times]')
+async def repeat(ctx, *args):
+    voice_client = ctx.message.guild.voice_client
+    if (voice_client and voice_client.source and voice_client.source.link):
+        n = 1
+        if len(args) > 0:
+            n = args[0]
+        while n > 0:
+            await play(ctx, voice_client.source.link)
+            await move(ctx, -1, 1)
+            await ctx.message.add_reaction(thumbsup)
+            n -= 1
+    elif not voice_client:
+        await ctx.send(embed=discord.Embed(description='The bot has no voice client for the server.',
+            color=discord.Colour.red()))
+    else:
+        await ctx.send(embed=discord.Embed(description='The bot has no source, or no link to the current source.',
+            color=discord.Colour.gold()))
 
 @bot.event
 async def on_ready():
