@@ -37,18 +37,19 @@ class SongList:
         self.songs = Queue2()
         self.songlist = [] # contains list of songs and lengths to display in queue
 
-    def get(self):
+    async def get(self):
+        s = await self.songs.get()
         self.songlist.pop(0)
-        return self.songs.get()
+        return s
 
     def get_nowait(self):
         self.songlist.pop(0)
         return self.songs.get_nowait()
 
-    def put(self, val):
+    async def put(self, val):
         (_,_,source) = val
         self.songlist.append({'link':source.link, 'length':source.length})
-        return self.songs.put(val)
+        return await self.songs.put(val)
 
     def qsize(self):
         return self.songs.qsize()
