@@ -72,7 +72,7 @@ class SongList:
         return self.songlist[i]['link']
 
     def get_length(self, i):
-        return self.songlist[i]['link']
+        return self.songlist[i]['length']
 
     def get_title(self, i):
         return self.value_at(i)[2].title
@@ -294,6 +294,8 @@ async def play(ctx, *args):
 
     print('playing from args')
     # combine mutli-word search to one url
+    print('args:')
+    print(repr(args))
     url = ' '.join(args)
 
     async with ctx.typing():
@@ -301,6 +303,8 @@ async def play(ctx, *args):
         ytsource = ytsources[0]
         for ytsource in ytsources:
             if len(ytsources) == 1:
+                print('queuing args:')
+                print(repr(args))
                 ytsource.request = args
             else:
                 ytsource.request = ytsource.link
@@ -509,9 +513,9 @@ async def repeat(ctx, *args):
     if (voice_client and voice_client.source and voice_client.source.request):
         n = 1
         if len(args) > 0:
-            n = args[0]
+            n = int(args[0])
         while n > 0:
-            await play(ctx, voice_client.source.request)
+            await play(ctx, *voice_client.source.request)
             await move(ctx, -1, 1)
             await ctx.message.add_reaction(thumbsup)
             n -= 1
