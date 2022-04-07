@@ -300,6 +300,10 @@ async def play(ctx, *args):
         ytsources = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
         ytsource = ytsources[0]
         for ytsource in ytsources:
+            if len(ytsources) == 1:
+                ytsource.request = args
+            else:
+                ytsource.request = ytsource.link
             await songs.put((ctx, voice_client, ytsource))
 
         embed = discord.Embed(description='Failed to queue songs',
@@ -502,12 +506,12 @@ async def remove(ctx, *args):
 @bot.command(aliases=['rp','spam'], help='Repeats the current track [x times]')
 async def repeat(ctx, *args):
     voice_client = ctx.message.guild.voice_client
-    if (voice_client and voice_client.source and voice_client.source.link):
+    if (voice_client and voice_client.source and voice_client.source.request):
         n = 1
         if len(args) > 0:
             n = args[0]
         while n > 0:
-            await play(ctx, voice_client.source.link)
+            await play(ctx, voice_client.source.request)
             await move(ctx, -1, 1)
             await ctx.message.add_reaction(thumbsup)
             n -= 1
