@@ -1,2 +1,2 @@
-source /usr/share/venvs/17slimBot/bin/activate
+source .venv/bin/activate
 python ./17slimBot.py
